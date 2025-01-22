@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Motion Graph</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: lime;
+            text-align: center;
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        canvas {
+            background: white;
+            border-radius: 10px;
+        }
+        #ballCanvas {
+            display: block;
+            margin: 20px auto;
+            background: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Physics Motion Graph</h2>
+        <label>Velocity (m/s): <span id="velocityValue">0</span></label>
+        <input type="range" id="velocity" min="-50" max="50" step="1" value="0" class="form-range">
+        
+        <label>Acceleration (m/s²): <span id="accelerationValue">0</span></label>
+        <input type="range" id="acceleration" min="-20" max="20" step="0.5" value="0" class="form-range">
+        
+        <canvas id="motionChart" width="1200"></canvas>
+        <canvas id="ballCanvas" width="400" height="400"></canvas>
+        
+        <button class="btn btn-primary mt-3" onclick="toggleAnimation()">Play/Pause</button>
+        <button class="btn btn-danger mt-3" onclick="restartGraph()">Restart</button>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('motionChart').getContext('2d');
+        const ballCanvas = document.getElementById('ballCanvas');
+        const ballCtx = ballCanvas.getContext('2d');
+        let velocity = 0;
+        let acceleration = 0;
+        let time = Array.from({ length: 41 }, (_, i) => i);
+        let speedData = Array(41).fill(0);
+        let distanceData = Array(41).fill(0);
+        let accelerationData = Array(41).fill(0);
+        let animationRunning = false;
+        let frame = 0;
+        let angle = 0;
+        let lastTime = null;
+
+        function updateData() {
+            speedData = time.map(t => velocity + acceleration * t);
+            distanceData = time.map(t => velocity * t + 0.5 * acceleration * t * t);
+            accelerationData = time.map(() => acceleration);
+        }
+
+        updateData();
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: time,
+                datasets: [
+                    { label: 'Speed (m/s)', data: speedData, borderColor: 'blue', fill: false },
+                    { label: 'Distance (m)', data: distanceData, borderColor: 'green', fill: false },
+                    { label: 'Acceleration (m/s²)', data: accelerationData, borderColor: 'red', fill: false }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: { x: { title: { text: 'Time (s)' } }, y: { title: { text: 'Value' }, min: -400, max: 400 } }
+            }
+        });
+
+        function drawBall() {
+            ballCtx.clearRect(0, 0, 400, 400);
+            ballCtx.beginPath();
+            ballCtx.arc(200, 200, 100, 0, Math.PI * 2);
+            ballCtx.strokeStyle = 'white';
+            ballCtx.lineWidth = 3;
+            ballCtx.stroke();
+            
+            let x = 200 + 100 * Math.cos(angle);
+            let y = 200 + 100 * Math.sin(angle);
+            
+            ballCtx.beginPath();
+            ballCtx.arc(x, y, 10, 0, Math.PI * 2);
+            ballCtx.fillStyle = 'red';
+            ballCtx.fill();
+            
+            let displayVelocity = speedData[Math.min(Math.floor(frame), speedData.length - 1)] || 0;
+            ballCtx.font = "20px Arial";
+            ballCtx.fillStyle = "white";
+            ballCtx.fillText(`Velocity: ${displayVelocity.toFixed(2)} m/s`, 120, 50);
+        }
+
+        function smoothAnimate(timestamp) {
+            if (!animationRunning) return;
+            if (!lastTime) lastTime = timestamp;
+            let deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            let currentVelocity = speedData[Math.min(Math.floor(frame), speedData.length - 1)] || 0;
+            angle += currentVelocity * deltaTime * 0.05;
+            drawBall();
+
+            if (frame < time.length - 1) {
+                frame += deltaTime * (time.length / 40);
+            } else {
+                animationRunning = false;
+            }
+            requestAnimationFrame(smoothAnimate);
+        }
+
+        function updateGraph() {
+            velocity = parseFloat(document.getElementById('velocity').value);
+            acceleration = parseFloat(document.getElementById('acceleration').value);
+            document.getElementById('velocityValue').textContent = velocity;
+            document.getElementById('accelerationValue').textContent = acceleration;
+            updateData();
+            chart.data.datasets[0].data = speedData;
+            chart.data.datasets[1].data = distanceData;
+            chart.data.datasets[2].data = accelerationData;
+            chart.update();
+        }
+
+        function toggleAnimation() {
+            animationRunning = !animationRunning;
+            if (animationRunning) {
+                lastTime = null;
+                requestAnimationFrame(smoothAnimate);
+                animateGraph();
+            }
+        }
+        function animateGraph() {
+            if (!animationRunning || frame >= time.length) return;
+            chart.data.datasets[0].data = speedData.slice(0, frame);
+            chart.data.datasets[1].data = distanceData.slice(0, frame);
+            chart.data.datasets[2].data = accelerationData.slice(0, frame);
+            chart.update();
+            frame++;
+            setTimeout(animateGraph, 500);
+        }
+        function restartGraph() {
+            animationRunning = false;
+            frame = 0;
+            angle = 0;
+            updateGraph();
+            drawBall();
+        }
+
+        document.getElementById('velocity').addEventListener('input', updateGraph);
+        document.getElementById('acceleration').addEventListener('input', updateGraph);
+        updateGraph();
+        drawBall();
+    </script>
+</body>
+</html>
